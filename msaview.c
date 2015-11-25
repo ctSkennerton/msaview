@@ -151,7 +151,17 @@ int main(int argc, char * argv[])
     int i, ch = 0;
     unsigned int start_row = 0;		// defines first line in the window
     unsigned int start_col = 0;		// defines first column in the window
-    unsigned int sidebar   = 6;     // the length of the sidebar
+    unsigned int sidebar   = 15;     // the length of the sidebar
+    unsigned int max_sidebar = phys_col * 0.2 ; // the sidebar should be at most 1/5 of the screen 
+    int j;
+    for(j = 0; j < msa->nseq; ++j)
+    {
+        unsigned int sqname_len = strlen(msa->sqname[j]);
+        if(sqname_len > sidebar && sqname_len <= max_sidebar)
+        {
+            sidebar = sqname_len;
+        }
+    }
 
     /*
      * do loops are effectively upsidedown while loops.
@@ -196,7 +206,7 @@ int main(int argc, char * argv[])
              * mvprintw takes the row to print in, the column to start at,
              * a printf-style format string, and a list of params
              */
-            mvprintw(i+1, 0, "%4d:", i + start_row + 1); 	// print line number
+            mvprintw(i+1, 0, "%-*s:", sidebar, msa->sqname[i + start_row]); 	// print line number
             attroff(A_REVERSE);		// back to normal
 
             mvprintw(i+1, sidebar, "%s", msa->aseq[i+start_row] + start_col); // print line contents
