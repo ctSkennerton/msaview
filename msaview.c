@@ -4,6 +4,7 @@
 #include <time.h>
 #include <getopt.h>
 #include <ncurses.h>
+#include <math.h>
 
 #include "easel/include/esl_config.h"
 #include "easel/include/easel.h"
@@ -26,29 +27,31 @@ fprintf(stderr, "msaview [-f <format>] <msafile>\n\
 \nThe defult is to guess the format\n");
 exit(1);
 }
-/* void write_status(int rows, int cols, char* filename, int start_row, int end)
- *
- * write out a simple status bar with formatting
- *
- * parameters:
- * 	int row   - # of rows in display
- * 	int cols  - # of columns in display
- * 	char* filename - filename to print in center of statusbar
- * 	int start_row - # of first row displayed
- * 	int end   - # of last row displayed
- *
- * returns:
- * 	none
- */
-void write_status(int rows, int cols, char* filename, int start_row, int end){
+
+// returns the length of characters required to print a number
+int numLen(int n)
+{
+    if(n == 0) return 1;
+    else return floor(log10(abs(n))) + 1;
+}
+
+void write_position(int rows, int cols, int sidebar, int start_col){
     attron(A_REVERSE);			// set the text mode to reverse (bg on fg)
-    move(0,0);				// move to the upper-left corner
-    int i;
+    move(0,0);          		// move to the upper-left corner
+    int i, j;
     for(i = 0; i < cols; i++)
     { addch(' '); }			// write a black bar across the top
-    mvprintw(0,0, "Curses Pager");	// write out the program name
-    mvprintw(0,(cols-sizeof(filename))/2, "%s", filename); // write the file name
-    mvprintw(0,cols-12,"%04d - %04d", start_row, end); // write pos
+    for(i = sidebar, j = start_col + 1; i < cols; ++i, ++j)
+    {
+        if(j % 10 == 0)
+        {
+            //only print the number if it doesn't overflow the end of the screen
+            if(i + numLen(j) + 1 <= cols)
+            {
+                mvprintw(0,i, "|%d", j);
+            }
+        }
+    }
     attroff(A_REVERSE);			// switch back to white on black
 }
 
@@ -206,13 +209,14 @@ int main(int argc, char * argv[])
              * mvprintw takes the row to print in, the column to start at,
              * a printf-style format string, and a list of params
              */
-            mvprintw(i+1, 0, "%-*s:", sidebar, msa->sqname[i + start_row]); 	// print line number
+            mvprintw(i+1, 0, "%-*s", sidebar, msa->sqname[i + start_row]); 	// print line number
             attroff(A_REVERSE);		// back to normal
 
             mvprintw(i+1, sidebar, "%s", msa->aseq[i+start_row] + start_col); // print line contents
         }
 
         // draw the status bars
+        write_position(phys_row, phys_col, sidebar, start_col);
         //write_status(phys_row, phys_col, argv[1], start_row + 1, start_row + i);
 
 
