@@ -61,7 +61,7 @@ void write_position(int rows, int cols, int sidebar, int start_col){
 // the default terminal colors go from 1 to 16. I don't want to mess with them
 // so I'm going to start my colors at 17.
 typedef enum {
-    red = 17,
+    red = 0,
     blue,
     green,
     cyan,
@@ -76,24 +76,39 @@ typedef struct {
     uint16_t bg;
 } ColorPair_t;
 
-ColorPair_t colors[8];
-colors[0] = {}
+ColorPair_t custom_colors[8];
 
 // maps characters to their corresponding colors
 char color_table[] = {
-    0,   0, 0,   0,   0,   0,   0,   0,   0,   0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, green, cyan, pink, magenta, yellow,
-    orange, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, 0,  0,  0,  0,  0,
-    0, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, green, cyan, pink, magenta, yellow,
-    orange, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, 0, 0, 0, 0, 0
+    -1,   -1, -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,  -1,  -1,  -1,  -1,  -1,  -1,
+    -1,  -1,  -1,   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+    -1,  -1,  -1,   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+    -1,  -1,  -1,   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+    -1, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, green, cyan, pink, magenta, yellow,
+    orange, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, -1,  -1,  -1,  -1,  -1,
+    -1, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, green, cyan, pink, magenta, yellow,
+    orange, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, -1, -1, -1, -1, -1
 };
-/*
 void init_clustalx_colors()
 {
     
+    custom_colors[0].fg = 196;
+    custom_colors[0].bg = 232;
+    custom_colors[1].fg = 21;
+    custom_colors[1].bg = 232;
+    custom_colors[2].fg = 22;
+    custom_colors[2].bg = 232;
+    custom_colors[3].fg = 80;
+    custom_colors[3].bg = 232;
+    custom_colors[4].fg = 213;
+    custom_colors[4].bg = 232;
+    custom_colors[5].fg = 165;
+    custom_colors[5].bg = 232;
+    custom_colors[6].fg = 220;
+    custom_colors[6].bg = 232;
+    custom_colors[7].fg = 172;
+    custom_colors[7].bg = 232;
+/*
     if(!has_colors())
     {
         fprintf(stderr, "Cannot change colors\n");
@@ -110,8 +125,9 @@ void init_clustalx_colors()
     init_pair(magenta, -1, 165);
     init_pair(yellow, 242, 220);
     init_pair(orange, -1, 172);
-}
 */
+}
+
 
 void print_tb(const char *str, int x, int y, uint16_t fg, uint16_t bg)
 {
@@ -131,6 +147,24 @@ void printf_tb(int x, int y, uint16_t fg, uint16_t bg, const char *fmt, ...)
     vsnprintf(buf, sizeof(buf), fmt, vl);
     va_end(vl);
     print_tb(buf, x, y, fg, bg);
+}
+
+void write_position(int rows, int cols, int sidebar, int start_col){
+    int i, j;
+    for(i = 0; i < cols; i++)
+    { tb_change_cell(i, 0, ' ', 0, 255); }         // write a black bar across the top
+    for(i = sidebar, j = start_col + 1; i < cols; ++i, ++j)
+    {
+        if(j % 10 == 0)
+        {
+            int n = numLen(j);
+            //only print the number if it doesn't overflow the end of the screen
+            if(i + n + 1 <= cols)
+            {
+                printf_tb(i, 0, 0, 255, "|%d", j);
+            }
+        }
+    }
 }
 
 int main(int argc, char * argv[])
@@ -197,6 +231,7 @@ int main(int argc, char * argv[])
     tb_init();
     tb_select_input_mode(TB_INPUT_ESC | TB_INPUT_MOUSE);
     tb_select_output_mode(TB_OUTPUT_256);
+    init_clustalx_colors();
     phys_row = tb_height();
     phys_col = tb_width();
 
@@ -275,7 +310,7 @@ int main(int argc, char * argv[])
              * mvprintw takes the row to print in, the column to start at,
              * a printf-style format string, and a list of params
              */
-            printf_tb(0, i+1, 184, 240, "%-*s", sidebar, msa->sqname[i + start_row]); 
+            printf_tb(0, i+1, 0, 255, "%-*s", sidebar, msa->sqname[i + start_row]); 
             //mvprintw(i+1, 0, "%-*s", sidebar, msa->sqname[i + start_row]); 	// print line number
             //attroff(A_REVERSE);		// back to normal
 
@@ -285,15 +320,22 @@ int main(int argc, char * argv[])
             for(j = 0; j < phys_col - sidebar; j++)
             {
                 char c = msa->aseq[i+start_row][start_col + j];
-                unsigned int attr_color = (c != 0) ? COLOR_PAIR(color_table[c]) : 0;
-                addch( (unsigned int) msa->aseq[i+start_row][start_col+j] | attr_color );
+                char d = color_table[c];
+                if(d != -1)
+                {
+                    tb_change_cell(j+sidebar, i+1, c, custom_colors[d].fg, custom_colors[d].bg );
+                }
+                else
+                {
+                    tb_change_cell(j+sidebar, i+1, c, 7, 232 );
+                }
+
             }
             
         }
 
         // draw the status bars
-        //write_position(phys_row, phys_col, sidebar, start_col);
-        //write_status(phys_row, phys_col, argv[1], start_row + 1, start_row + i);
+        write_position(phys_row, phys_col, sidebar, start_col);
 
 
         tb_present();
