@@ -3,13 +3,16 @@
 #include <string.h>
 #include <time.h>
 #include <getopt.h>
-#include <ncurses.h>
 #include <math.h>
+#include <stdarg.h>
 
 #include "easel/include/esl_config.h"
 #include "easel/include/easel.h"
 #include "easel/include/esl_msa.h"
 #include "easel/include/esl_msafile.h"
+
+#include "termbox/include/termbox.h"
+
 void usage()
 {
 fprintf(stderr, "msaview [-f <format>] <msafile>\n\
@@ -34,7 +37,7 @@ int numLen(int n)
     if(n == 0) return 1;
     else return floor(log10(abs(n))) + 1;
 }
-
+/*
 void write_position(int rows, int cols, int sidebar, int start_col){
     attron(A_REVERSE);			// set the text mode to reverse (bg on fg)
     move(0,0);          		// move to the upper-left corner
@@ -53,6 +56,81 @@ void write_position(int rows, int cols, int sidebar, int start_col){
         }
     }
     attroff(A_REVERSE);			// switch back to white on black
+}
+*/
+// the default terminal colors go from 1 to 16. I don't want to mess with them
+// so I'm going to start my colors at 17.
+typedef enum {
+    red = 17,
+    blue,
+    green,
+    cyan,
+    pink,
+    magenta,
+    yellow,
+    orange
+} clustalx_colors_t;
+
+typedef struct {
+    uint16_t fg;
+    uint16_t bg;
+} ColorPair_t;
+
+ColorPair_t colors[8];
+colors[0] = {}
+
+// maps characters to their corresponding colors
+char color_table[] = {
+    0,   0, 0,   0,   0,   0,   0,   0,   0,   0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, green, cyan, pink, magenta, yellow,
+    orange, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, 0,  0,  0,  0,  0,
+    0, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, green, cyan, pink, magenta, yellow,
+    orange, red, blue, green, cyan, pink, magenta, yellow, orange, red, blue, 0, 0, 0, 0, 0
+};
+/*
+void init_clustalx_colors()
+{
+    
+    if(!has_colors())
+    {
+        fprintf(stderr, "Cannot change colors\n");
+    }
+
+    // map enumerated names onto the terminal colors
+    // https://lh3.googleusercontent.com/-JBl1Qa6UoBo/USXe5Wzw5uI/AAAAAAAAEeI/f0tyZjXBiyw/s800/2013-02-21--15%253A03%253A58.png
+    // http://misc.flogisoft.com/_media/bash/colors_format/256-colors.sh.png
+    init_pair(red, -1, 196);
+    init_pair(blue, -1, 21);
+    init_pair(green, -1, 22);
+    init_pair(cyan, 242, 80);
+    init_pair(pink, 242, 213);
+    init_pair(magenta, -1, 165);
+    init_pair(yellow, 242, 220);
+    init_pair(orange, -1, 172);
+}
+*/
+
+void print_tb(const char *str, int x, int y, uint16_t fg, uint16_t bg)
+{
+    while (*str) {
+        uint32_t uni;
+        str += tb_utf8_char_to_unicode(&uni, str);
+        tb_change_cell(x, y, uni, fg, bg);
+        x++;
+    }
+}
+
+void printf_tb(int x, int y, uint16_t fg, uint16_t bg, const char *fmt, ...)
+{
+    char buf[4096];
+    va_list vl;
+    va_start(vl, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, vl);
+    va_end(vl);
+    print_tb(buf, x, y, fg, bg);
 }
 
 int main(int argc, char * argv[])
@@ -116,33 +194,14 @@ int main(int argc, char * argv[])
      * corresponds to the size of the terminal when ncurses start_rowed
      */
 
-    initscr();
+    tb_init();
+    tb_select_input_mode(TB_INPUT_ESC | TB_INPUT_MOUSE);
+    tb_select_output_mode(TB_OUTPUT_256);
+    phys_row = tb_height();
+    phys_col = tb_width();
 
-    /*
-     * we don't know the size of stdscr as yet, but that would probably
-     * be good to know. getmaxyx takes the window to size and variables
-     * in which to place its dimensions
-     */
-    getmaxyx(stdscr, phys_row, phys_col);
-
-    /*
-     * normally, calls to get input will wait until they see a line break
-     * (exactly as stdio or iostream would work). switching on raw
-     * mode means we get data as soon as it's available.
-     */
-    raw();
-
-    /*
-     * switching on keypad mode means that we'll receive things like
-     * arrow and function keypresses, in addition to normal text data
-     */
-    keypad(stdscr, TRUE);
-
-    /*
-     * by default, ncurses will "echo" keypresses - that is, print the
-     * character on screen. we don't want that, so we'll shut echo off
-     */
-    noecho();
+    // this struct holds keyboard events for us to process
+    struct tb_event ev;
 
     /*
      * time to do the actual paging
@@ -151,12 +210,11 @@ int main(int argc, char * argv[])
      * and then printing from there until we run out of screen or file,
      * whichever happens first
      */
-    int i, ch = 0;
+    int i, j;
     unsigned int start_row = 0;		// defines first line in the window
     unsigned int start_col = 0;		// defines first column in the window
     unsigned int sidebar   = 15;     // the length of the sidebar
     unsigned int max_sidebar = phys_col * 0.2 ; // the sidebar should be at most 1/5 of the screen 
-    int j;
     for(j = 0; j < msa->nseq; ++j)
     {
         unsigned int sqname_len = strlen(msa->sqname[j]);
@@ -172,28 +230,36 @@ int main(int argc, char * argv[])
      */
     do {
         // we'll only be here if a keypress occurred, so process that first
-        switch (ch) {
-            // KEY_UP is defined by ncurses, and corresponds to the up arrow
-            case KEY_UP:			
-                if(start_row > 0) start_row--;	// move the start line up if not at the top
-                break;
-            case KEY_DOWN:			// move down if not at end of file
-                if(start_row < (msa->nseq - (phys_row - 1))) start_row++;
-                break;
-            case KEY_LEFT:          // move back one column if not at the begining
-                if(start_col > 0) start_col--;
-                break;
-            case KEY_RIGHT:         // move forward one column
-                if(start_col < (msa->alen - (phys_col - 1) + sidebar)) start_col++;
-                break;
+        switch (ev.type) {
+            case TB_EVENT_KEY:
+            {
+                switch(ev.key) {
+                    case 'q':
+                    case 'Q':
+                    case TB_KEY_CTRL_X:
+                        goto CLEANUP;
+                        break;
+                        // KEY_UP is defined by ncurses, and corresponds to the up arrow
+                    case TB_KEY_ARROW_UP:			
+                        if(start_row > 0) start_row--;	// move the start line up if not at the top
+                        break;
+                    case TB_KEY_ARROW_DOWN:			// move down if not at end of file
+                        if(start_row < (msa->nseq - (phys_row - 1))) start_row++;
+                        break;
+                    case TB_KEY_ARROW_LEFT:          // move back one column if not at the begining
+                        if(start_col > 0) start_col--;
+                        break;
+                    case TB_KEY_ARROW_RIGHT:         // move forward one column
+                        if(start_col < (msa->alen - (phys_col - 1) + sidebar)) start_col++;
+                        break;
+                }
+            }
         }
 
         /*
-         * for the most part, ncurses behaves the way you'd expect a graphics
-         * library to work. the window retains contents until cleared, so we
-         * should clear it before we start laying down new data
+         * clear the internal buffer ready for more rendering 
          */
-        clear();
+        tb_clear();
 
         //we'll loop from the starting row until we run out of screen or file
 
@@ -202,39 +268,41 @@ int main(int argc, char * argv[])
              * attron and attroff turn attributes on and off, respectively.
              * pass the attribute you want to fiddle with in, and it'll get set/cleared
              */
-            attron(A_REVERSE);		// set the text mode to reverse (bg on fg)
+            //attron(A_REVERSE);		// set the text mode to reverse (bg on fg)
 
             /*
              * ncurses provides three output functions in the style of printf
              * mvprintw takes the row to print in, the column to start at,
              * a printf-style format string, and a list of params
              */
-            mvprintw(i+1, 0, "%-*s", sidebar, msa->sqname[i + start_row]); 	// print line number
-            attroff(A_REVERSE);		// back to normal
+            printf_tb(0, i+1, 184, 240, "%-*s", sidebar, msa->sqname[i + start_row]); 
+            //mvprintw(i+1, 0, "%-*s", sidebar, msa->sqname[i + start_row]); 	// print line number
+            //attroff(A_REVERSE);		// back to normal
 
-            mvprintw(i+1, sidebar, "%s", msa->aseq[i+start_row] + start_col); // print line contents
+            //mvprintw(i+1, sidebar, "%s", msa->aseq[i+start_row] + start_col); // print line contents
+            
+            int j;
+            for(j = 0; j < phys_col - sidebar; j++)
+            {
+                char c = msa->aseq[i+start_row][start_col + j];
+                unsigned int attr_color = (c != 0) ? COLOR_PAIR(color_table[c]) : 0;
+                addch( (unsigned int) msa->aseq[i+start_row][start_col+j] | attr_color );
+            }
+            
         }
 
         // draw the status bars
-        write_position(phys_row, phys_col, sidebar, start_col);
+        //write_position(phys_row, phys_col, sidebar, start_col);
         //write_status(phys_row, phys_col, argv[1], start_row + 1, start_row + i);
 
 
-        /*
-         * you can think of ncurses as though it double-buffers. changes
-         * are made to a buffer behind the scenes and then written, all
-         * at once, to screen when refresh() is called
-         */
-        refresh();
+        tb_present();
     }
-    while((ch = getch()) != 'q');		// continue until user hits q
+    while(tb_poll_event(&ev));
 
-    /*
-     * as with anything you have to explicitely set up, you have to
-     * tell ncurses to tear itself down before your program exits.
-     * exitwin() does this.
-     */
-    endwin();
+CLEANUP:
+    tb_shutdown();
+    esl_msa_Destroy(msa);
 
     return 0;
 }
