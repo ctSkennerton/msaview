@@ -48,7 +48,7 @@ man1ext     = .1
 # Compiler configuration
 #
 CC       = gcc -std=gnu99
-CFLAGS   = -O3 -fomit-frame-pointer -fstrict-aliasing -march=bdver1 -pthread -fPIC
+CFLAGS   = -g -Wall -pthread -fPIC
 SIMDFLAGS= -msse2
 CPPFLAGS = 
 LDFLAGS  = 

@@ -4,7 +4,7 @@ VPATH      =  ..
 SHELL      = /bin/sh
 
 CC         = gcc -std=gnu99
-CFLAGS     = -O3 -fomit-frame-pointer -fstrict-aliasing -march=bdver1 -pthread -fPIC
+CFLAGS     = -g -Wall -pthread -fPIC
 CPPFLAGS   = 
 LDFLAGS    = 
 SIMDFLAGS  = -msse2

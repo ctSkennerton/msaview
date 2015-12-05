@@ -31,7 +31,7 @@
 
 /* Debugging verbosity (0=none;3=most verbose)
  */
-#define eslDEBUGLEVEL 0
+#define eslDEBUGLEVEL 1
 
 /* System headers
  */
@@ -46,7 +46,7 @@
 #define HAVE_SYS_SYSCTL_H 1
 
 #define HAVE_EMMINTRIN_H 1
-#define HAVE_PMMINTRIN_H 1
+/* #undef HAVE_PMMINTRIN_H */
 #define HAVE_XMMINTRIN_H 1
 
 /* #undef HAVE_ALTIVEC_H */
